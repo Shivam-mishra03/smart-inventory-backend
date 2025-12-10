@@ -1,0 +1,84 @@
+package com.shivam.inventory.security;
+
+import com.shivam.inventory.user.UserRepository;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+    private final UserRepository userRepository;
+
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, UserRepository userRepository) {
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.userRepository = userRepository;
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService());
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+    @Bean
+    public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+        var config = new org.springframework.web.cors.CorsConfiguration();
+        config.addAllowedOrigin("http://127.0.0.1:5501");   // Allow your frontend
+        config.addAllowedMethod("*");
+        config.addAllowedHeader("*");
+        config.setAllowCredentials(true);
+
+        var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
+        http
+            .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/api/auth/**").permitAll()
+                    .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+
+}
