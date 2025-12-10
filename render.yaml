@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: smart-inventory-backend
+    env: docker
+    plan: free
+    branch: main
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
